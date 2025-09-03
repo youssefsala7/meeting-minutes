@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useContext, useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Info, Loader2 } from 'lucide-react';
@@ -6,22 +8,25 @@ import { load } from '@tauri-apps/plugin-store';
 import { invoke } from '@tauri-apps/api/core';
 import { Analytics } from '@/lib/analytics';
 
-
 export default function AnalyticsConsentSwitch() {
   const { setIsAnalyticsOptedIn, isAnalyticsOptedIn } = useContext(AnalyticsContext);
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   // Load saved preference on component mount
   useEffect(() => {
     const loadPreference = async () => {
       try {
-        const store = await load('analytics.json', { autoSave: false, defaults:
+        const store = await load('analytics.json', {
+          autoSave: false,
+          defaults: { analyticsOptedIn: false },
+        });
         const saved = await store.get<boolean>('analyticsOptedIn');
         if (saved !== null && saved !== undefined) {
           setIsAnalyticsOptedIn(saved);
         }
-      } catch (error) {
-        console.log('No saved analytics preference found, using default');
+      } catch {
+        // No saved analytics preference found, keep default
+        // (intentionally silent to avoid noisy logs in web build)
       }
     };
     loadPreference();
@@ -31,34 +36,37 @@ export default function AnalyticsConsentSwitch() {
     // Optimistic update - immediately update UI state
     setIsAnalyticsOptedIn(enabled);
     setIsProcessing(true);
-    
+
     try {
-      const store = await load('analytics.json', { autoSave: false, defaults:
+      const store = await load('analytics.json', {
+        autoSave: false,
+        defaults: { analyticsOptedIn: false },
+      });
       await store.set('analyticsOptedIn', enabled);
       await store.save();
-      
+
       if (enabled) {
         // Full analytics initialization (same as AnalyticsProvider)
         const userId = await Analytics.getPersistentUserId();
-        
+
         // Initialize analytics
         await Analytics.init();
-        
+
         // Identify user with enhanced properties immediately after init
         await Analytics.identify(userId, {
           app_version: '0.0.5',
           platform: 'tauri',
           first_seen: new Date().toISOString(),
-          os: navigator.platform,
-          user_agent: navigator.userAgent,
+          os: typeof navigator !== 'undefined' ? navigator.platform : 'unknown',
+          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
         });
-        
+
         // Start analytics session with the same user ID
         await Analytics.startSession(userId);
-        
+
         // Track app started (re-enabled)
         await Analytics.trackAppStarted();
-        
+
         console.log('Analytics re-enabled successfully');
       } else {
         await Analytics.disable();
@@ -68,7 +76,7 @@ export default function AnalyticsConsentSwitch() {
       console.error('Failed to toggle analytics:', error);
       // Revert the optimistic update on error
       setIsAnalyticsOptedIn(!enabled);
-      // You could also show a toast notification here to inform the user
+      // Optionally: show a toast here
     } finally {
       setIsProcessing(false);
     }
@@ -76,7 +84,9 @@ export default function AnalyticsConsentSwitch() {
 
   const handlePrivacyPolicyClick = async () => {
     try {
-      await invoke('open_external_url', { url: 'https://github.com/Zackriya-Solutions/meeting-minutes/blob/main/PRIVACY_POLICY.md' });
+      await invoke('open_external_url', {
+        url: 'https://github.com/Zackriya-Solutions/meeting-minutes/blob/main/PRIVACY_POLICY.md',
+      });
     } catch (error) {
       console.error('Failed to open privacy policy link:', error);
     }
@@ -87,7 +97,8 @@ export default function AnalyticsConsentSwitch() {
       <div>
         <h3 className="text-base font-semibold text-gray-800 mb-2">Usage Analytics</h3>
         <p className="text-sm text-gray-600 mb-4">
-          Help us improve Meetily by sharing anonymous usage data. No personal content is collected—everything stays on your device.
+          Help us improve Meetily by sharing anonymous usage data. No personal content is
+          collected—everything stays on your device.
         </p>
       </div>
 
@@ -99,24 +110,16 @@ export default function AnalyticsConsentSwitch() {
           </p>
         </div>
         <div className="flex items-center gap-2 ml-4">
-          {isProcessing && (
-            <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-          )}
-          <Switch
-            checked={isAnalyticsOptedIn}
-            onCheckedChange={handleToggle}
-            disabled={isProcessing}
-          />
+          {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-gray-500" />}
+          <Switch checked={isAnalyticsOptedIn} onCheckedChange={handleToggle} disabled={isProcessing} />
         </div>
       </div>
 
       <div className="flex items-start gap-2 p-2 bg-blue-50 rounded border border-blue-200">
         <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
         <div className="text-xs text-blue-700">
-          <p className="mb-1">
-            Your meetings, transcripts, and recordings remain completely private and local.
-          </p>
-          <button 
+          <p className="mb-1">Your meetings, transcripts, and recordings remain completely private and local.</p>
+          <button
             onClick={handlePrivacyPolicyClick}
             className="text-blue-600 hover:text-blue-800 underline hover:no-underline"
           >
