@@ -2,28 +2,27 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+# use ci when lockfile exists, otherwise fall back to install
+RUN npm ci || npm install
 
-# 2) build Next.js
+# 2) build + export static site
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+# Build then export to /app/out
+RUN npm run build && npx next export -o out
 
-# 3) run server
+# 3) serve exported site
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
-
-# runtime payload for `next start`
-COPY --from=build /app/.next ./.next
-COPY --from=deps /app/node_modules ./node_modules
-COPY public ./public
-COPY package.json next.config.js ./
-
+RUN npm i -g serve
+COPY --from=build /app/out ./out
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD wget -qO- http://localhost:3000/ || exit 1
-CMD ["npm", "run", "start"]
+# healthcheck hits the exported index
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:3000/index.html || exit 1
+CMD sh -c "serve -s out -l ${PORT:-3000}"
