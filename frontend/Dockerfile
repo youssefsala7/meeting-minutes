@@ -2,14 +2,13 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # 2) build Next.js
-FROM node:20-alpine AS builder
+FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Make sure Next sees production env
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
@@ -18,9 +17,13 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
-# Minimal runtime payload
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY package.json ./
+
+# runtime payload for `next start`
+COPY --from=build /app/.next ./.next
+COPY --from=deps /app/node_modules ./node_modules
+COPY public ./public
+COPY package.json next.config.js ./
+
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD wget -qO- http://localhost:3000/ || exit 1
 CMD ["npm", "run", "start"]
