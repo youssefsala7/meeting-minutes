@@ -7,9 +7,9 @@ from typing import Optional, List
 import logging
 from dotenv import load_dotenv
 from .db import DatabaseManager
+from .transcript_processor import TranscriptProcessor
 import json
 from threading import Lock
-from transcript_processor import TranscriptProcessor
 import time
 
 # Load environment variables
