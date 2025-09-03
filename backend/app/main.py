@@ -6,7 +6,7 @@ import uvicorn
 from typing import Optional, List
 import logging
 from dotenv import load_dotenv
-from db import DatabaseManager
+from .db import DatabaseManager
 import json
 from threading import Lock
 from transcript_processor import TranscriptProcessor
@@ -39,6 +39,9 @@ app = FastAPI(
     description="API for processing and summarizing meeting transcripts",
     version="1.0.0"
 )
+@app.get("/health")
+def health():
+    return {"ok": True}
 
 # Configure CORS
 app.add_middleware(
